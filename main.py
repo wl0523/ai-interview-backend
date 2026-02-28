@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
 from supabase import create_client
 from dotenv import load_dotenv
 import os
+import PyPDF2
 
 # =========================
 # Load Environment Variables
@@ -80,7 +81,6 @@ Output ONLY the question sentence. No numbering, no explanation, no extra text."
         )
 
         question = response.choices[0].message.content
-        print('Generated question:', question)
 
         # Supabase 저장
         supabase.table("interview_results").insert({
@@ -133,5 +133,38 @@ Provide:
 
         return {"evaluation": evaluation}
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================
+# Analyze Resume
+# =========================
+
+@app.post("/analyze-resume")
+def analyze_resume(file: UploadFile = File(...)):
+    try:
+        # PDF 텍스트 추출
+        pdf_reader = PyPDF2.PdfReader(file.file)
+        text = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="PDF에서 텍스트를 추출할 수 없습니다.")
+        # OpenAI 프롬프트
+        prompt = f"""
+        아래는 한 지원자의 이력서 전문입니다. 이 내용을 바탕으로 맞춤형 기술 면접 질문 1개를 생성하세요.
+        질문은 지원자의 경력, 기술, 프로젝트, 역할에 맞게 구체적으로 작성하고, 질문만 출력하세요.
+        이력서:
+        {text}
+        """
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert technical interviewer. Generate a personalized interview question based on the resume below. Output ONLY the question."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300
+        )
+        question = response.choices[0].message.content
+        return question
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

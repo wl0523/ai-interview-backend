@@ -80,6 +80,7 @@ Output ONLY the question sentence. No numbering, no explanation, no extra text."
         )
 
         question = response.choices[0].message.content
+        print('Generated question:', question)
 
         # Supabase 저장
         supabase.table("interview_results").insert({
@@ -134,4 +135,3 @@ Provide:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    

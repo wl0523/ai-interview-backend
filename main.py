@@ -65,14 +65,6 @@ class EvaluationRequest(BaseModel):
 
 @app.post("/generate-question")
 def generate_question(req: QuestionRequest):
-
-You MUST write the question in {req.language}.
-Output ONLY the question sentence. No numbering, no explanation, no extra text."""
-
-
-
-
-
     try:
         prompt = f"""Generate exactly ONE technical interview question for a {req.job_role} position.\nYou MUST write the question in {req.language}.\nOutput ONLY the question sentence. No numbering, no explanation, no extra text."""
         response = client.chat.completions.create(

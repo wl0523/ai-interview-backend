@@ -66,15 +66,14 @@ class EvaluationRequest(BaseModel):
 def generate_question(req: QuestionRequest):
 
     try:
-        prompt = f"""
-        {req.job_role} 포지션 기술 면접 질문 1개를 {req.language}로 생성해주세요.
-        질문만 출력하고, 번호나 부가 설명 없이 질문 문장만 반환하세요.
-        """
+        prompt = f"""Generate exactly ONE technical interview question for a {req.job_role} position.
+You MUST write the question in {req.language}.
+Output ONLY the question sentence. No numbering, no explanation, no extra text."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": f"당신은 시니어 기술 면접관입니다. 모든 응답은 {req.language}로 작성하세요."},
+                {"role": "system", "content": f"You are a senior technical interviewer. You MUST respond ONLY in {req.language}. Do not use any other language."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=300
@@ -102,22 +101,21 @@ def generate_question(req: QuestionRequest):
 def evaluate_answer(req: EvaluationRequest):
 
     try:
-        prompt = f"""
-        Question: {req.question}
+        prompt = f"""Question: {req.question}
 
-        Answer: {req.answer}
+Answer: {req.answer}
 
-        Evaluate the answer in {req.language} and provide:
-        - Score (0-100)
-        - Strengths
-        - Weaknesses
-        - Improvement advice
-        """
+Evaluate the answer above. You MUST respond ONLY in {req.language}.
+Provide:
+- Score (0-100)
+- Strengths
+- Weaknesses
+- Improvement advice"""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": f"You are a senior technical interviewer. Respond entirely in {req.language}."},
+                {"role": "system", "content": f"You are a senior technical interviewer. You MUST respond ONLY in {req.language}. Do not use any other language under any circumstances."},
                 {"role": "user", "content": prompt}
             ]
         )

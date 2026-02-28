@@ -66,11 +66,15 @@ class EvaluationRequest(BaseModel):
 @app.post("/generate-question")
 def generate_question(req: QuestionRequest):
 
-    try:
-        prompt = f"""Generate exactly ONE technical interview question for a {req.job_role} position.
 You MUST write the question in {req.language}.
 Output ONLY the question sentence. No numbering, no explanation, no extra text."""
 
+
+
+
+
+    try:
+        prompt = f"""Generate exactly ONE technical interview question for a {req.job_role} position.\nYou MUST write the question in {req.language}.\nOutput ONLY the question sentence. No numbering, no explanation, no extra text."""
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -79,19 +83,14 @@ Output ONLY the question sentence. No numbering, no explanation, no extra text."
             ],
             max_tokens=300
         )
-
         question = response.choices[0].message.content
-
-        # Supabase 저장
         supabase.table("interview_results").insert({
             "user_id": req.user_id,
             "question": question
         }).execute()
-
         return {"question": question}
-
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
 
 
 # =========================
@@ -101,18 +100,18 @@ Output ONLY the question sentence. No numbering, no explanation, no extra text."
 @app.post("/evaluate-answer")
 def evaluate_answer(req: EvaluationRequest):
 
-    try:
-        prompt = f"""Question: {req.question}
 
 Answer: {req.answer}
 
 Evaluate the answer above. You MUST respond ONLY in {req.language}.
 Provide:
-- Score (0-100)
-- Strengths
-- Weaknesses
-- Improvement advice"""
 
+
+
+
+
+    try:
+        prompt = f"""Question: {req.question}\n\nAnswer: {req.answer}\n\nEvaluate the answer above. You MUST respond ONLY in {req.language}.\nProvide:\n- Score (0-100)\n- Strengths\n- Weaknesses\n- Improvement advice"""
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -120,21 +119,16 @@ Provide:
                 {"role": "user", "content": prompt}
             ]
         )
-
         evaluation = response.choices[0].message.content
-
-        # Supabase 저장 f
         supabase.table("interview_results").insert({
             "user_id": req.user_id,
             "question": req.question,
             "answer": req.answer,
             "evaluation": evaluation
         }).execute()
-
         return {"evaluation": evaluation}
-
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
 
 
 # =========================
@@ -148,23 +142,26 @@ def analyze_resume(file: UploadFile = File(...)):
         pdf_reader = PyPDF2.PdfReader(file.file)
         text = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
         if not text.strip():
-            raise HTTPException(status_code=400, detail="PDF에서 텍스트를 추출할 수 없습니다.")
-        # OpenAI 프롬프트
+            return {"error": "PDF에서 텍스트를 추출할 수 없습니다."}
+        # OpenAI 프롬프트 (이력서 리뷰 + 개선점 + 맞춤형 질문 3~5개)
         prompt = f"""
-        아래는 한 지원자의 이력서 전문입니다. 이 내용을 바탕으로 맞춤형 기술 면접 질문 1개를 생성하세요.
-        질문은 지원자의 경력, 기술, 프로젝트, 역할에 맞게 구체적으로 작성하고, 질문만 출력하세요.
-        이력서:
-        {text}
+        아래는 한 지원자의 이력서 전문입니다. 이 내용을 바탕으로 아래 두 가지를 출력하세요.\n\n1. 이력서의 문제점, 개선점, 빠진 내용 등 리뷰를 3~5줄로 요약\n2. 지원자의 경력, 기술, 프로젝트, 역할에 맞는 맞춤형 기술 면접 질문 3~5개를 리스트로 생성\n\n아래 형식의 JSON으로만 출력하세요:\n{{\n  \"review\": \"이력서 리뷰 및 개선점\",\n  \"questions\": [\"질문1\", \"질문2\", ...]\n}}\n\n이력서:\n{text}
         """
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are an expert technical interviewer. Generate a personalized interview question based on the resume below. Output ONLY the question."},
+                {"role": "system", "content": "You are an expert technical interviewer. Analyze the resume below and output a JSON with review and a list of personalized interview questions."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=300
+            max_tokens=600
         )
-        question = response.choices[0].message.content
-        return question
+        # 응답에서 JSON 파싱
+        import json
+        content = response.choices[0].message.content
+        try:
+            result = json.loads(content)
+        except Exception:
+            result = {"review": "AI 응답 파싱 오류", "questions": [content]}
+        return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}

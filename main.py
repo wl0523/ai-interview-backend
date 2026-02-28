@@ -50,11 +50,13 @@ supabase = create_client(
 class QuestionRequest(BaseModel):
     job_role: str
     user_id: str
+    language: str = '한국어'
 
 class EvaluationRequest(BaseModel):
     user_id: str
     question: str
     answer: str
+    language: str = '한국어'
 
 # =========================
 # Generate Question
@@ -65,15 +67,17 @@ def generate_question(req: QuestionRequest):
 
     try:
         prompt = f"""
-        Generate one technical interview question for a {req.job_role} position.
+        {req.job_role} 포지션 기술 면접 질문 1개를 {req.language}로 생성해주세요.
+        질문만 출력하고, 번호나 부가 설명 없이 질문 문장만 반환하세요.
         """
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are an expert technical interviewer."},
+                {"role": "system", "content": f"당신은 시니어 기술 면접관입니다. 모든 응답은 {req.language}로 작성하세요."},
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            max_tokens=300
         )
 
         question = response.choices[0].message.content
@@ -103,7 +107,7 @@ def evaluate_answer(req: EvaluationRequest):
 
         Answer: {req.answer}
 
-        Evaluate the answer and provide:
+        Evaluate the answer in {req.language} and provide:
         - Score (0-100)
         - Strengths
         - Weaknesses
@@ -113,7 +117,7 @@ def evaluate_answer(req: EvaluationRequest):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a senior technical interviewer."},
+                {"role": "system", "content": f"You are a senior technical interviewer. Respond entirely in {req.language}."},
                 {"role": "user", "content": prompt}
             ]
         )

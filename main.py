@@ -91,17 +91,6 @@ def generate_question(req: QuestionRequest):
 
 @app.post("/evaluate-answer")
 def evaluate_answer(req: EvaluationRequest):
-
-
-Answer: {req.answer}
-
-Evaluate the answer above. You MUST respond ONLY in {req.language}.
-Provide:
-
-
-
-
-
     try:
         prompt = f"""Question: {req.question}\n\nAnswer: {req.answer}\n\nEvaluate the answer above. You MUST respond ONLY in {req.language}.\nProvide:\n- Score (0-100)\n- Strengths\n- Weaknesses\n- Improvement advice"""
         response = client.chat.completions.create(

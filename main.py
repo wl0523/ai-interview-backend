@@ -1,18 +1,43 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
 from supabase import create_client
 from dotenv import load_dotenv
 import os
 
+# =========================
+# Load Environment Variables
+# =========================
+
 load_dotenv()
 
 app = FastAPI()
 
-# OpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# =========================
+# CORS
+# =========================
 
-# Supabase
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# =========================
+# OpenAI Setup
+# =========================
+
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY")
+)
+
+# =========================
+# Supabase Setup
+# =========================
+
 supabase = create_client(
     os.getenv("SUPABASE_URL"),
     os.getenv("SUPABASE_KEY")
@@ -37,27 +62,32 @@ class EvaluationRequest(BaseModel):
 
 @app.post("/generate-question")
 def generate_question(req: QuestionRequest):
-    prompt = f"""
-    Generate one technical interview question for a {req.job_role} position.
-    """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are an expert technical interviewer."},
-            {"role": "user", "content": prompt}
-        ]
-    )
+    try:
+        prompt = f"""
+        Generate one technical interview question for a {req.job_role} position.
+        """
 
-    question = response.choices[0].message.content
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert technical interviewer."},
+                {"role": "user", "content": prompt}
+            ]
+        )
 
-    # Supabase 저장
-    supabase.table("interview_results").insert({
-        "user_id": req.user_id,
-        "question": question
-    }).execute()
+        question = response.choices[0].message.content
 
-    return {"question": question}
+        # Supabase 저장
+        supabase.table("interview_results").insert({
+            "user_id": req.user_id,
+            "question": question
+        }).execute()
+
+        return {"question": question}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =========================
@@ -67,34 +97,39 @@ def generate_question(req: QuestionRequest):
 @app.post("/evaluate-answer")
 def evaluate_answer(req: EvaluationRequest):
 
-    prompt = f"""
-    Question: {req.question}
-    Answer: {req.answer}
+    try:
+        prompt = f"""
+        Question: {req.question}
 
-    Evaluate the answer.
-    Give:
-    - Score (0-100)
-    - Strengths
-    - Weaknesses
-    - Improvement advice
-    """
+        Answer: {req.answer}
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a senior technical interviewer."},
-            {"role": "user", "content": prompt}
-        ]
-    )
+        Evaluate the answer and provide:
+        - Score (0-100)
+        - Strengths
+        - Weaknesses
+        - Improvement advice
+        """
 
-    evaluation = response.choices[0].message.content
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a senior technical interviewer."},
+                {"role": "user", "content": prompt}
+            ]
+        )
 
-    # Supabase 업데이트
-    supabase.table("interview_results").insert({
-        "user_id": req.user_id,
-        "question": req.question,
-        "answer": req.answer,
-        "evaluation": evaluation
-    }).execute()
+        evaluation = response.choices[0].message.content
 
-    return {"evaluation": evaluation}
+        # Supabase 저장 f
+        supabase.table("interview_results").insert({
+            "user_id": req.user_id,
+            "question": req.question,
+            "answer": req.answer,
+            "evaluation": evaluation
+        }).execute()
+
+        return {"evaluation": evaluation}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
